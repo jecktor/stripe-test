@@ -268,7 +268,7 @@ async function handleInvoiceSucceeded(invoice: stripe.Invoice) {
   }
 }
 
-async function handleSubscriptionUpdate(
+function handleSubscriptionUpdate(
   subscription: stripe.Subscription,
   userRef: Reference,
   newPriceId: string,
@@ -291,7 +291,7 @@ async function handleSubscriptionUpdate(
   });
 }
 
-async function handleSubscriptionCancel(
+function handleSubscriptionCancel(
   subscription: stripe.Subscription,
   userRef: Reference,
   priceId: string,
@@ -315,7 +315,19 @@ async function handleSubscriptionCancel(
 }
 
 async function handleSubscriptionDelete(subscription: stripe.Subscription) {
-  console.log(subscription);
+  const user = await admin
+    .database()
+    .ref("users")
+    .orderByChild("subscription/id")
+    .equalTo(subscription.id)
+    .once("value");
+
+  const userId = Object.keys(user.val())[0];
+  const userRef = admin.database().ref(`users/${userId}`);
+
+  userRef.update({
+    subscription: null,
+  });
 }
 
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
