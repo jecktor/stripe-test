@@ -24,6 +24,7 @@ const plans = [
 export default function Home() {
   const [user, setUser] = useState(auth.currentUser);
   const [subscription, setSubscription] = useState<Subscription>();
+  const [loading, setLoading] = useState(true);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -36,6 +37,8 @@ export default function Home() {
         const plan = snapshot.val().subscription || null;
 
         if (plan) setSubscription(plan);
+
+        setLoading(false);
       });
     });
 
@@ -56,6 +59,21 @@ export default function Home() {
       .catch(console.error);
   }
 
+  function handleManageSubscription() {
+    fetch("http://localhost:3001/create-billing-portal-link", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ customerId: user?.uid }),
+    })
+      .then((res) => res.json())
+      .then(({ url }) => (window.location = url))
+      .catch(console.error);
+  }
+
+  if (loading) return <p>Loading...</p>;
+
   return (
     <>
       {user && (
@@ -69,19 +87,23 @@ export default function Home() {
                 Your plan renews on{" "}
                 {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
               </p>
+              <button onClick={() => handleManageSubscription()}>
+                Manage subscription
+              </button>
             </div>
           )}
           <button onClick={() => auth.signOut()}>Logout</button>
           <div>
-            {plans.map((plan) => (
-              <div key={plan.id}>
-                <h2>{plan.name}</h2>
-                <p>${plan.price}</p>
-                <button onClick={() => handleCheckout(plan.id)}>
-                  Checkout
-                </button>
-              </div>
-            ))}
+            {!subscription &&
+              plans.map((plan) => (
+                <div key={plan.id}>
+                  <h2>{plan.name}</h2>
+                  <p>${plan.price}</p>
+                  <button onClick={() => handleCheckout(plan.id)}>
+                    Checkout
+                  </button>
+                </div>
+              ))}
           </div>
         </>
       )}
