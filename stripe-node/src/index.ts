@@ -86,7 +86,30 @@ app.get("/create-checkout-link", async (req, res) => {
   }
 });
 
-app.get("/create-billing-portal-link", (req, res) => {});
+app.get("/create-billing-portal-link", async (req, res) => {
+  const { customerId } = req.body;
+
+  if (!customerId || typeof customerId !== "string" || customerId.length !== 28)
+    return res.status(400).json({ message: "Bad request" });
+
+  const user = await admin.database().ref(`users/${customerId}`).once("value");
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  if (!user.val().subscription || !user.val().subscription.customerId)
+    return res.status(403).json({ message: "User has no active subscription" });
+
+  try {
+    const session = await stripeInstance.billingPortal.sessions.create({
+      customer: user.val().subscription.customerId,
+      return_url: REDIRECT_URL,
+    });
+
+    return res.status(200).json({ url: session.url });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 // Stripe webhook endpoint
 app.post("/webhooks/stripe", (req, res) => {
