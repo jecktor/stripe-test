@@ -19,7 +19,7 @@ admin.initializeApp({
   databaseURL: "https://clever-fit-6084a-default-rtdb.firebaseio.com",
 });
 
-const stripeInstance = new stripe(STRIPE_SECRET);
+const stripeInstance = new stripe(STRIPE_SECRET, { typescript: true });
 
 const app = express();
 
@@ -42,7 +42,7 @@ app.use(
 );
 
 // Plan subscription checkout session endpoint. (Only for first time subscription)
-app.post("/create-checkout-session", async (req, res) => {
+app.get("/create-checkout-session", async (req, res) => {
   const { planId, customerId } = req.body;
 
   if (
@@ -57,13 +57,15 @@ app.post("/create-checkout-session", async (req, res) => {
   const plan = plans[planId];
   if (!plan) return res.status(404).json({ message: "Plan not found" });
 
-  const user = await admin.database().ref(`users/${customerId}`).once("value");
+  const user = await admin.auth().getUser(customerId);
   if (!user) return res.status(404).json({ message: "User not found" });
 
   try {
     const session = await stripeInstance.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
+      billing_address_collection: "auto",
+      customer_email: user.email,
       line_items: [
         {
           price: plan.price,
@@ -147,7 +149,7 @@ async function handleCheckoutComplete(
           id: subscription.id,
           customerId: subscription.customer as string,
           currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-          name: plan.name,
+          plan: plan.name,
           priceId,
         },
       });
@@ -185,7 +187,7 @@ async function handleInvoiceSucceeded(invoice: stripe.Invoice) {
             id: subscription.id,
             customerId: subscription.customer as string,
             currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            name: plan.name,
+            plan: plan.name,
             priceId,
           },
         });

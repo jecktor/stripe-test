@@ -3,8 +3,8 @@ import { useLocation } from "wouter";
 import { ref, get } from "firebase/database";
 import { auth, db } from "../db/firebase";
 
-interface Plan {
-  name: string;
+interface Subscription {
+  plan: string;
   currentPeriodEnd: number;
 }
 
@@ -23,7 +23,7 @@ const plans = [
 
 export default function Home() {
   const [user, setUser] = useState(auth.currentUser);
-  const [plan, setPlan] = useState<Plan>(null);
+  const [subscription, setSubscription] = useState<Subscription>();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function Home() {
       get(ref(db, `users/${user?.uid}`)).then((snapshot) => {
         const plan = snapshot.val().subscription || null;
 
-        if (plan) setPlan(plan);
+        if (plan) setSubscription(plan);
       });
     });
 
@@ -45,7 +45,7 @@ export default function Home() {
 
   function handleCheckout(planId: number) {
     fetch("http://localhost:3001/create-checkout-session", {
-      method: "POST",
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
       },
@@ -62,12 +62,12 @@ export default function Home() {
         <>
           <h1>Home</h1>
           <p>Logged in as {user.email}</p>
-          {plan && (
+          {subscription && (
             <div>
-              <div>Plan: {plan.name}</div>
+              <div>Plan: {subscription.plan}</div>
               <p>
                 Your plan renews on{" "}
-                {new Date(plan.currentPeriodEnd).toLocaleDateString()}
+                {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
               </p>
             </div>
           )}
