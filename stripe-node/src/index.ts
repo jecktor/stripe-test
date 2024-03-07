@@ -42,7 +42,7 @@ app.use(
 );
 
 // Plan subscription checkout session endpoint. (Only for first time subscription)
-app.get("/create-checkout-link", async (req, res) => {
+app.post("/create-checkout-link", async (req, res) => {
   const { planId, customerId } = req.body;
 
   if (
@@ -86,7 +86,7 @@ app.get("/create-checkout-link", async (req, res) => {
   }
 });
 
-app.get("/create-billing-portal-link", async (req, res) => {
+app.post("/create-billing-portal-link", async (req, res) => {
   const { customerId } = req.body;
 
   if (!customerId || typeof customerId !== "string" || customerId.length !== 28)

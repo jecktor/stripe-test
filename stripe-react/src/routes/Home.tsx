@@ -45,7 +45,7 @@ export default function Home() {
 
   function handleCheckout(planId: number) {
     fetch("http://localhost:3001/create-checkout-link", {
-      method: "GET",
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
