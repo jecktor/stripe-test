@@ -3,6 +3,8 @@ import cors from "cors";
 import admin from "firebase-admin";
 import stripe from "stripe";
 
+import type { Reference } from "firebase-admin/database";
+
 import serviceAccount from "./serviceAccountKey.json";
 import { plans, type Plan } from "./plans";
 
@@ -112,7 +114,7 @@ app.post("/create-billing-portal-link", async (req, res) => {
 });
 
 // Stripe webhook endpoint
-app.post("/webhooks/stripe", (req, res) => {
+app.post("/webhooks/stripe", async (req, res) => {
   const sig = req.headers["stripe-signature"]!;
 
   let event: stripe.Event;
@@ -140,6 +142,44 @@ app.post("/webhooks/stripe", (req, res) => {
       if (invoice.billing_reason === "subscription_create") return;
 
       handleInvoiceSucceeded(invoice);
+      break;
+    case "customer.subscription.updated":
+      const subscription = event.data.object as stripe.Subscription;
+
+      const user = await admin
+        .database()
+        .ref("users")
+        .orderByChild("subscription/id")
+        .equalTo(subscription.id)
+        .once("value");
+
+      const userId = Object.keys(user.val())[0];
+      const userRef = admin.database().ref(`users/${userId}`);
+
+      const priceId = (Object.values(user.val())[0] as any).subscription
+        .priceId as string;
+
+      // Subscription canceled
+      if (subscription.cancel_at) {
+        handleSubscriptionCancel(subscription, userRef, priceId);
+        return res.json({ received: true });
+      }
+
+      // Subscription updated
+      const newPriceId = subscription.items.data[0].price.id;
+
+      if (priceId !== newPriceId) {
+        handleSubscriptionUpdate(subscription, userRef, newPriceId);
+        return res.json({ received: true });
+      }
+
+      // Subscription reactivated
+      handleSubscriptionUpdate(subscription, userRef, priceId);
+      break;
+    case "customer.subscription.deleted":
+      const deletedSubscription = event.data.object as stripe.Subscription;
+
+      handleSubscriptionDelete(deletedSubscription);
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -176,6 +216,9 @@ async function handleCheckoutComplete(
           currentPeriodEnd: new Date(subscription.current_period_end * 1000),
           plan: plan.name,
           priceId,
+          cancelled: false,
+          cancelAt: null,
+          cancelAtPeriodEnd: null,
         },
       });
   } catch (error) {
@@ -198,28 +241,81 @@ async function handleInvoiceSucceeded(invoice: stripe.Invoice) {
     );
 
     // Find the user with the matching subscription ID
-    await admin
+    const user = await admin
       .database()
       .ref("users")
       .orderByChild("subscription/id")
-      .equalTo(subscriptionId)
-      .once("value", (snapshot) => {
-        const userId = Object.keys(snapshot.val())[0];
-        const userRef = admin.database().ref(`users/${userId}`);
+      .equalTo(subscription.id)
+      .once("value");
 
-        userRef.update({
-          subscription: {
-            id: subscription.id,
-            customerId: subscription.customer as string,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            plan: plan.name,
-            priceId,
-          },
-        });
-      });
+    const userId = Object.keys(user.val())[0];
+    const userRef = admin.database().ref(`users/${userId}`);
+
+    userRef.update({
+      subscription: {
+        id: subscription.id,
+        customerId: subscription.customer as string,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        plan: plan.name,
+        priceId,
+        cancelled: false,
+        cancelAt: null,
+        cancelAtPeriodEnd: null,
+      },
+    });
   } catch (error) {
     console.error(error);
   }
+}
+
+async function handleSubscriptionUpdate(
+  subscription: stripe.Subscription,
+  userRef: Reference,
+  newPriceId: string,
+) {
+  const newPlan: Plan = Object.values(plans).find(
+    (p: Plan) => p.price === newPriceId,
+  );
+
+  userRef.update({
+    subscription: {
+      id: subscription.id,
+      customerId: subscription.customer as string,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      plan: newPlan.name,
+      priceId: newPriceId,
+      cancelled: false,
+      cancelAt: null,
+      cancelAtPeriodEnd: null,
+    },
+  });
+}
+
+async function handleSubscriptionCancel(
+  subscription: stripe.Subscription,
+  userRef: Reference,
+  priceId: string,
+) {
+  const plan: Plan = Object.values(plans).find(
+    (p: Plan) => p.price === priceId,
+  );
+
+  userRef.update({
+    subscription: {
+      id: subscription.id,
+      customerId: subscription.customer as string,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      plan: plan.name,
+      priceId,
+      cancelled: true,
+      cancelAt: new Date(subscription.cancel_at! * 1000),
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    },
+  });
+}
+
+async function handleSubscriptionDelete(subscription: stripe.Subscription) {
+  console.log(subscription);
 }
 
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
