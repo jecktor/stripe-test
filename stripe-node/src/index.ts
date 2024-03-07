@@ -42,7 +42,7 @@ app.use(
 );
 
 // Plan subscription checkout session endpoint. (Only for first time subscription)
-app.get("/create-checkout-session", async (req, res) => {
+app.get("/create-checkout-link", async (req, res) => {
   const { planId, customerId } = req.body;
 
   if (
@@ -79,12 +79,14 @@ app.get("/create-checkout-session", async (req, res) => {
       cancel_url: REDIRECT_URL,
     });
 
-    return res.status(200).json({ session });
+    return res.status(200).json({ url: session.url });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
+app.get("/create-billing-portal-link", (req, res) => {});
 
 // Stripe webhook endpoint
 app.post("/webhooks/stripe", (req, res) => {

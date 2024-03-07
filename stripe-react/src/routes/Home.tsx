@@ -44,7 +44,7 @@ export default function Home() {
   }, []);
 
   function handleCheckout(planId: number) {
-    fetch("http://localhost:3001/create-checkout-session", {
+    fetch("http://localhost:3001/create-checkout-link", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -52,7 +52,7 @@ export default function Home() {
       body: JSON.stringify({ planId, customerId: user?.uid }),
     })
       .then((res) => res.json())
-      .then(({ session }) => (window.location = session.url))
+      .then(({ url }) => (window.location = url))
       .catch(console.error);
   }
 
