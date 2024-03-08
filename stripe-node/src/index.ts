@@ -88,6 +88,7 @@ app.post("/create-checkout-link", async (req, res) => {
   }
 });
 
+// Subscription management portal link endpoint
 app.post("/create-billing-portal-link", async (req, res) => {
   const { customerId } = req.body;
 
